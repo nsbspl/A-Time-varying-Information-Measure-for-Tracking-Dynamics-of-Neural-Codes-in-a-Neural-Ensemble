@@ -1,0 +1,46 @@
+load Matr_onset_2
+load Matr_Rate_2
+load Matr_Amp_2
+Matr_Rate = Matr_Rate_2;
+Matr_onset = Matr_onset_2;
+Matr_Amp = Matr_Amp_2;
+Matr_2nd_Inp = zeros(size(Matr_Amp));
+
+tt = 0:p.dt:p.tStop;
+L_tt = length(tt);
+
+midpoint = 15;
+a_slow = 60;
+a_fast = 25; %
+
+for k = 1:20
+    input_step = zeros(length(tt),1);   
+    vq1 = input_step;
+    indx_onset = Matr_onset(:,k);
+    for i=1:length(indx_onset)-1
+        input_step(indx_onset(i)+1:indx_onset(i+1)) = Matr_Amp(i,k);
+        vq1(indx_onset(i)+1:indx_onset(i+1)) = Matr_Rate(i,k);
+    end
+    sig_onset_fast = zeros(length(tt),1);
+    sig_onset_fast(indx_onset) = 1;
+    TW = 1;
+%sig_Est = KernelPSTH (sig_onset_fast,TW,p.dt,Trial_num); sig_Est = sig_Est/max(sig_Est);
+    kernel_rectangle = [zeros(1/p.dt,1); ones(5/p.dt,1); zeros(1/p.dt,1)]; L_k = length(kernel_rectangle);
+    sigg_ = conv(sig_onset_fast,kernel_rectangle); sig_Est = sigg_(L_k/2:end-L_k/2); sig_Est = sig_Est/max(sig_Est);
+    fr_slow = vq1;%(vq1-mean(vq1))/max(vq1);
+    fr_fast = 30 * sig_Est;
+    tEnd = 50*1e-3; % msec
+    tau_rise = 0.5; tau_fall = 3;
+    Gz = exp2syn(p.dt, tEnd, tau_rise, tau_fall); % tau_rise = 0.5 and tau_decay = 3;
+    L_Gz = length(Gz);
+    fr_fast_syn = conv(fr_fast,Gz); fr_fast_syn = fr_fast_syn(L_Gz/2:end-L_Gz/2);
+    fr_slow_syn = conv(fr_slow,Gz); fr_slow_syn = fr_slow_syn(L_Gz/2:end-L_Gz/2);
+    % fr_slow_syn = fr_slow_syn*std(fr_slow)/std(fr_slow_syn);
+    % fr_fast_syn = fr_fast_syn*max(fr_fast)/max(fr_fast_syn);
+    syn_scale = 15/std(fr_slow_syn + fr_fast_syn);
+    fr_mix_2nd = syn_scale * (fr_slow_syn + fr_fast_syn)*1e-3;
+    for i=1:length(indx_onset)-1
+        Matr_2nd_Inp(i,k) = mean(fr_mix_2nd(indx_onset(i)+1:indx_onset(i+1)));
+    end
+    
+end
